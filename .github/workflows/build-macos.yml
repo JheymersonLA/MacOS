@@ -1,4 +1,4 @@
-name: Gerar DMG macOS com installinstallmacos.py
+name: Gerar DMG macOS com gibMacOS
 
 on:
   workflow_dispatch:
@@ -12,19 +12,22 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Instalar dependências
-        run: brew install python3
+        run: |
+          brew install python3
+          python3 -m pip install --upgrade pip
+          pip3 install xattr
 
-      - name: Baixar installinstallmacos.py
-        run: curl -L -o installinstallmacos.py https://raw.githubusercontent.com/munki/macadmin-scripts/main/installinstallmacos.py
+      - name: Baixar script installinstallmacos.py
+        run: |
+          curl -L -o installinstallmacos.py https://raw.githubusercontent.com/munki/macadmin-scripts/main/installinstallmacos.py
 
-      - name: Baixar instalador macOS
+      - name: Baixar instalador macOS (última versão pública)
         run: |
           python3 installinstallmacos.py --auto --no-verify
-          # Isso gera um arquivo .pkg ou .dmg
 
       - name: Encontrar InstallAssistant.pkg
         run: |
-          PKG=$(find . -type f -name "InstallAssistant*.pkg" | head -n1)
+          PKG=$(find . -name "InstallAssistant*.pkg" | head -n1)
           echo "PKG_PATH=$PKG" >> $GITHUB_ENV
 
       - name: Extrair InstallAssistant.pkg
@@ -32,7 +35,7 @@ jobs:
           mkdir installer
           pkgutil --expand-full "$PKG_PATH" installer/
 
-      - name: Copiar .app
+      - name: Localizar e copiar .app
         run: |
           APP=$(find installer -type d -name "Install macOS *.app" | head -n1)
           echo "APP_PATH=$APP" >> $GITHUB_ENV
@@ -40,10 +43,9 @@ jobs:
 
       - name: Criar DMG instalador
         run: |
-          APP_PATH="${{ env.APP_PATH }}"
           hdiutil create -o installer_raw -size 16000m -volname Installer -layout SPUD -fs HFS+J
           hdiutil attach installer_raw.dmg -noverify -mountpoint /Volumes/installer
-          sudo "/Applications/$(basename "$APP_PATH")/Contents/Resources/createinstallmedia" --volume /Volumes/installer --nointeraction
+          sudo /Applications/"$(basename "$APP_PATH")"/Contents/Resources/createinstallmedia --volume /Volumes/installer --nointeraction
           sudo hdiutil detach /Volumes/installer
           hdiutil convert installer_raw.dmg -format UDZO -o installer.dmg
 
