@@ -1,61 +1,42 @@
-name: Gerar DMG macOS com gibMacOS
+name: MacOS Installer Release
 
 on:
   push:
     branches:
       - master
-  workflow_dispatch:
 
 jobs:
-  build-installer:
+  build:
     runs-on: macos-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+    - name: Check out repository
+      uses: actions/checkout@v2
 
-      - name: Instalar dependências
-        run: |
-          brew install python3
-          python3 -m pip install --upgrade pip
-          python3 -m pip install xattr
+    - name: Baixar InstallAssistant.pkg
+      run: |
+        curl -L -o InstallAssistant.pkg "https://swcdn.apple.com/content/downloads/51/28/082-44432-A_4NJSZXK8G5/v10fo5dlwd50fja3qbnhj7z9tp1dx41vq2/InstallAssistant.pkg"
 
-      - name: Baixar script installinstallmacos.py
-        run: |
-          curl -L -o installinstallmacos.py https://raw.githubusercontent.com/munki/macadmin-scripts/main/installinstallmacos.py
+    - name: Extrair arquivo .dmg do InstallAssistant.pkg
+      run: |
+        # Montar o InstallAssistant.pkg
+        hdiutil attach InstallAssistant.pkg
 
-      - name: Baixar instalador macOS (última versão pública)
-        run: |
-          python3 installinstallmacos.py
+        # Encontrar e copiar o arquivo .dmg extraído
+        cp /Volumes/Install\ macOS\ [NomeDaVersao]/Install\ macOS\ [NomeDaVersao].dmg .
 
-      - name: Encontrar InstallAssistant.pkg
-        run: |
-          PKG=$(find . -name "InstallAssistant*.pkg" | head -n1)
-          echo "PKG_PATH=$PKG" >> $GITHUB_ENV
+        # Desmontar a imagem
+        hdiutil detach /Volumes/Install\ macOS\ [NomeDaVersao]
 
-      - name: Extrair InstallAssistant.pkg
-        run: |
-          mkdir installer
-          pkgutil --expand-full "$PKG_PATH" installer/
+    - name: Criar um Release no GitHub
+      uses: gh-cli/gh-actions@v1
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        release_name: "Release do macOS [NomeDaVersao]"
+        files: |
+          Install\ macOS\ [NomeDaVersao].dmg
 
-      - name: Localizar e copiar .app
-        run: |
-          APP=$(find installer -type d -name "Install macOS *.app" | head -n1)
-          echo "APP_PATH=$APP" >> $GITHUB_ENV
-          sudo cp -R "$APP" /Applications/
-
-      - name: Criar DMG instalador
-        run: |
-          APP_PATH="${{ env.APP_PATH }}"
-          hdiutil create -o installer_raw -size 16000m -volname Installer -layout SPUD -fs HFS+J
-          hdiutil attach installer_raw.dmg -noverify -mountpoint /Volumes/installer
-          sudo "/Applications/$(basename "$APP_PATH")/Contents/Resources/createinstallmedia" --volume /Volumes/installer --nointeraction
-          sudo hdiutil detach /Volumes/installer
-          hdiutil convert installer_raw.dmg -format UDZO -o installer.dmg
-
-      - name: Criar release com DMG
-        uses: softprops/action-gh-release@v1
-        with:
-          files: installer.dmg
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Limpeza
+      run: |
+        # Apagar arquivos temporários
+        rm -f InstallAssistant.pkg Install\ macOS\ [NomeDaVersao].dmg
