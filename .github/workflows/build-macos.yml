@@ -1,6 +1,5 @@
 name: Gerar DMG macOS com gibMacOS
 
-
 on:
   workflow_dispatch:
 
@@ -20,13 +19,10 @@ jobs:
         run: |
           git clone https://github.com/corpnewt/gibMacOS.git gibMacOS
 
-      - name: Executar gibMacOS (versão pública mais recente)
+      - name: Baixar InstallAssistant.pkg
         working-directory: gibMacOS
         run: |
-          echo publicrelease > catalog.txt
-          python3 gibMacOS.command <<EOF
-          1
-          EOF
+          python3 ./DownloadAssistant.py publicrelease
 
       - name: Encontrar InstallAssistant.pkg
         run: |
@@ -46,9 +42,10 @@ jobs:
 
       - name: Criar DMG instalador
         run: |
+          APP_PATH="${{ env.APP_PATH }}"
           hdiutil create -o installer_raw -size 16000m -volname Installer -layout SPUD -fs HFS+J
           hdiutil attach installer_raw.dmg -noverify -mountpoint /Volumes/installer
-          sudo /Applications/"$(basename "$APP_PATH")"/Contents/Resources/createinstallmedia --volume /Volumes/installer --nointeraction
+          sudo "/Applications/$(basename "$APP_PATH")/Contents/Resources/createinstallmedia" --volume /Volumes/installer --nointeraction
           sudo hdiutil detach /Volumes/installer
           hdiutil convert installer_raw.dmg -format UDZO -o installer.dmg
 
