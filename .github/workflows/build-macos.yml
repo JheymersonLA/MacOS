@@ -1,5 +1,6 @@
 name: Gerar DMG macOS com gibMacOS
 
+
 on:
   workflow_dispatch:
 
