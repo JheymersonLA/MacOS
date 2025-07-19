@@ -1,4 +1,4 @@
-name: MacOS Installer Release
+name: Create macOS .dmg from .app
 
 on:
   push:
@@ -13,27 +13,42 @@ jobs:
     - name: Check out repository
       uses: actions/checkout@v2
 
-    - name: Baixar InstallAssistant.pkg
-      run: |
-        curl -L -o InstallAssistant.pkg "https://swcdn.apple.com/content/downloads/51/28/082-44432-A_4NJSZXK8G5/v10fo5dlwd50fja3qbnhj7z9tp1dx41vq2/InstallAssistant.pkg"
+    - name: Verificar cache do InstallAssistant.pkg
+      uses: actions/cache@v3
+      with:
+        path: /tmp/InstallAssistant.pkg
+        key: install-assistant-pkg-${{ runner.os }}-${{ hashFiles('InstallAssistant.pkg') }}
+        restore-keys: |
+          install-assistant-pkg-${{ runner.os }}-
 
-    - name: Extrair arquivo .dmg do InstallAssistant.pkg
+    - name: Baixar InstallAssistant.pkg se não encontrado no cache
+      run: |
+        if [ ! -f /tmp/InstallAssistant.pkg ]; then
+          curl -L -o /tmp/InstallAssistant.pkg "https://swcdn.apple.com/content/downloads/51/28/082-44432-A_4NJSZXK8G5/v10fo5dlwd50fja3qbnhj7z9tp1dx41vq2/InstallAssistant.pkg"
+        fi
+
+    - name: Extrair o Install macOS.app
       run: |
         # Montar o InstallAssistant.pkg
-        hdiutil attach InstallAssistant.pkg
-
-        # Encontrar e copiar o arquivo .dmg extraído
-        cp /Volumes/Install\ macOS\ [NomeDaVersao]/Install\ macOS\ [NomeDaVersao].dmg .
-
+        hdiutil attach /tmp/InstallAssistant.pkg
+        
+        # Copiar o arquivo .app para o diretório de trabalho
+        cp -R /Volumes/"Install macOS"/Install\ macOS.app .
+        
         # Desmontar a imagem
-        hdiutil detach /Volumes/Install\ macOS\ [NomeDaVersao]
+        hdiutil detach /Volumes/"Install macOS"
+
+    - name: Criar um .dmg a partir do Install macOS.app
+      run: |
+        # Criar uma imagem de disco vazia (dmg) a partir do .app
+        hdiutil create -volname "Install macOS" -srcfolder "Install macOS.app" -ov -format UDZO /tmp/Install\ macOS.dmg
 
     - name: Criar um Release no GitHub
       uses: actions/create-release@v1
       with:
         tag_name: v1.0.0
-        release_name: "Release do macOS [NomeDaVersao]"
-        body: "Release contendo o arquivo .dmg do macOS"
+        release_name: "Release do macOS Install"
+        body: "Release contendo o Install macOS em formato .dmg"
         draft: false
         prerelease: false
       env:
@@ -43,9 +58,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: Install-macOS-dmg
-        path: Install\ macOS\ [NomeDaVersao].dmg
+        path: /tmp/Install\ macOS.dmg
 
     - name: Limpeza
       run: |
         # Apagar arquivos temporários
-        rm -f InstallAssistant.pkg Install\ macOS\ [NomeDaVersao].dmg
+        rm -f /tmp/InstallAssistant.pkg Install\ macOS.app /tmp/Install\ macOS.dmg
