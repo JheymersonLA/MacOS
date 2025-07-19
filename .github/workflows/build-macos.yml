@@ -3,7 +3,7 @@ name: Gerar DMG macOS com gibMacOS
 on:
   push:
     branches:
-      - master  # Isso faz com que o workflow rode automaticamente toda vez que houver um commit na branch 'main'
+      - main  # Isso faz com que o workflow rode automaticamente toda vez que houver um commit na branch 'main'
   workflow_dispatch:  # Ainda permite a execução manual, se necessário
 
 jobs:
@@ -19,8 +19,8 @@ jobs:
           brew install python3
           python3 -m venv venv
           source venv/bin/activate
-          pip install --upgrade pip
-          pip install xattr
+          sudo pip install --upgrade pip
+          sudo pip install xattr
         shell: bash
 
       - name: Baixar script installinstallmacos.py
@@ -41,7 +41,7 @@ jobs:
       - name: Extrair InstallAssistant.pkg
         run: |
           mkdir installer
-          pkgutil --expand-full "$PKG_PATH" installer/
+          sudo pkgutil --expand-full "$PKG_PATH" installer/
 
       - name: Localizar e copiar .app
         run: |
@@ -52,11 +52,11 @@ jobs:
       - name: Criar DMG instalador
         run: |
           APP_PATH="${{ env.APP_PATH }}"
-          hdiutil create -o installer_raw -size 16000m -volname Installer -layout SPUD -fs HFS+J
-          hdiutil attach installer_raw.dmg -noverify -mountpoint /Volumes/installer
+          sudo hdiutil create -o installer_raw -size 16000m -volname Installer -layout SPUD -fs HFS+J
+          sudo hdiutil attach installer_raw.dmg -noverify -mountpoint /Volumes/installer
           sudo "/Applications/$(basename "$APP_PATH")/Contents/Resources/createinstallmedia" --volume /Volumes/installer --nointeraction
           sudo hdiutil detach /Volumes/installer
-          hdiutil convert installer_raw.dmg -format UDZO -o installer.dmg
+          sudo hdiutil convert installer_raw.dmg -format UDZO -o installer.dmg
 
       - name: Criar release com DMG
         uses: softprops/action-gh-release@v1
