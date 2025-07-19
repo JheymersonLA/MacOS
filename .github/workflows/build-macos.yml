@@ -3,7 +3,7 @@ name: Gerar DMG macOS com gibMacOS
 on:
   push:
     branches:
-      - master  # Isso faz com que o workflow rode automaticamente toda vez que houver um commit na branch 'main'
+      - master  # Isso faz com que o workflow rode automaticamente toda vez que houver um commit na branch 'master'
   workflow_dispatch:  # Ainda permite a execução manual, se necessário
 
 jobs:
@@ -14,11 +14,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
       - name: Instalar dependências
         run: |
-          brew install python3
-          python3 -m pip install --upgrade pip
-          python3 -m pip install xattr
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install xattr
 
       - name: Baixar script installinstallmacos.py
         run: |
@@ -26,7 +32,7 @@ jobs:
 
       - name: Baixar instalador macOS (última versão pública)
         run: |
-          python3 installinstallmacos.py
+          python installinstallmacos.py
 
       - name: Encontrar InstallAssistant.pkg
         run: |
