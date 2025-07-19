@@ -1,7 +1,10 @@
 name: Gerar DMG macOS com gibMacOS
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - master  # Isso faz com que o workflow rode automaticamente toda vez que houver um commit na branch 'main'
+  workflow_dispatch:  # Ainda permite a execução manual, se necessário
 
 jobs:
   build-installer:
@@ -28,7 +31,7 @@ jobs:
       - name: Baixar instalador macOS (última versão pública)
         run: |
           source venv/bin/activate
-          python3 installinstallmacos.py --auto --no-verify
+          python3 installinstallmacos.py
 
       - name: Encontrar InstallAssistant.pkg
         run: |
