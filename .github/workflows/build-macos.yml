@@ -3,7 +3,7 @@ name: Gerar DMG macOS com gibMacOS
 on:
   push:
     branches:
-      - main  # Isso faz com que o workflow rode automaticamente toda vez que houver um commit na branch 'main'
+      - master  # Isso faz com que o workflow rode automaticamente toda vez que houver um commit na branch 'main'
   workflow_dispatch:  # Ainda permite a execução manual, se necessário
 
 jobs:
