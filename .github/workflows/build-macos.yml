@@ -11,7 +11,7 @@ jobs:
 
     steps:
     - name: Check out repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v2
 
     - name: Baixar InstallAssistant.pkg
       run: |
@@ -40,7 +40,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload do arquivo .dmg para o Release
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: Install-macOS-dmg
         path: Install\ macOS\ [NomeDaVersao].dmg
