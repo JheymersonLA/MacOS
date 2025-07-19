@@ -29,12 +29,21 @@ jobs:
         hdiutil detach /Volumes/Install\ macOS\ [NomeDaVersao]
 
     - name: Criar um Release no GitHub
-      uses: gh-cli/gh-actions@v1
+      uses: actions/create-release@v1
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        tag_name: v1.0.0
         release_name: "Release do macOS [NomeDaVersao]"
-        files: |
-          Install\ macOS\ [NomeDaVersao].dmg
+        body: "Release contendo o arquivo .dmg do macOS"
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload do arquivo .dmg para o Release
+      uses: actions/upload-artifact@v2
+      with:
+        name: Install-macOS-dmg
+        path: Install\ macOS\ [NomeDaVersao].dmg
 
     - name: Limpeza
       run: |
