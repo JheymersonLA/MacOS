@@ -37,15 +37,18 @@ jobs:
 
     - name: Verificar se o Install macOS.app foi instalado
       run: |
-        if [ ! -d /Applications/Install\ macOS.app ]; then
+        # Usar um padrão de nome para procurar o aplicativo
+        APP_DIR=$(find /Applications -name "Install macOS*.app" -maxdepth 1)
+        if [ -z "$APP_DIR" ]; then
           echo "Erro: Install macOS.app não encontrado em /Applications"
           exit 1
         fi
+        echo "Instalado: $APP_DIR"
 
     - name: Criar um .dmg a partir do Install macOS.app
       run: |
-        # Criar uma imagem de disco (dmg) a partir do .app
-        hdiutil create -volname "Install macOS" -srcfolder "/Applications/Install macOS.app" -ov -format UDZO /tmp/Install\ macOS.dmg
+        # Criar uma imagem de disco (dmg) a partir do .app encontrado
+        hdiutil create -volname "Install macOS" -srcfolder "$APP_DIR" -ov -format UDZO /tmp/Install\ macOS.dmg
 
     - name: Criar um Release no GitHub
       uses: actions/create-release@v1
