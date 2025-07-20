@@ -1,74 +1,57 @@
-name: Create macOS .dmg from Install macOS.app
+name: Criar DMG do macOS Installer
 
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: macos-latest
+  build-dmg:
+    runs-on: macos-14-arm64
 
     steps:
-    - name: Check out repository
-      uses: actions/checkout@v2
+      - name: Restaurar cache do InstallAssistant.pkg
+        uses: actions/cache@v3
+        id: cache-pkg
+        with:
+          path: /tmp/InstallAssistant.pkg
+          key: install-assistant-pkg-v1
 
-    - name: Verificar cache do InstallAssistant.pkg
-      uses: actions/cache@v3
-      with:
-        path: /tmp/InstallAssistant.pkg
-        key: install-assistant-pkg-${{ runner.os }}-${{ hashFiles('InstallAssistant.pkg') }}
-        restore-keys: |
-          install-assistant-pkg-${{ runner.os }}-
-
-    - name: Baixar InstallAssistant.pkg se não encontrado no cache
-      run: |
-        if [ ! -f /tmp/InstallAssistant.pkg ]; then
+      - name: Baixar InstallAssistant.pkg (se necessário)
+        if: steps.cache-pkg.outputs.cache-hit != 'true'
+        run: |
           echo "Baixando InstallAssistant.pkg..."
           curl -L -o /tmp/InstallAssistant.pkg "https://swcdn.apple.com/content/downloads/51/28/082-44432-A_4NJSZXK8G5/v10fo5dlwd50fja3qbnhj7z9tp1dx41vq2/InstallAssistant.pkg"
-        else
-          echo "InstallAssistant.pkg encontrado no cache."
-        fi
 
-    - name: Instalar o InstallAssistant.pkg
-      run: |
-        # Instalar o pacote .pkg no diretório /Applications
-        sudo installer -pkg /tmp/InstallAssistant.pkg -target /
+      - name: Instalar o InstallAssistant.pkg
+        run: |
+          sudo installer -pkg /tmp/InstallAssistant.pkg -target /
 
-    - name: Verificar se o Install macOS.app foi instalado
-      run: |
-        # Usar um padrão de nome para procurar o aplicativo
-        APP_DIR=$(find /Applications -name "Install macOS*.app" -maxdepth 1)
-        if [ -z "$APP_DIR" ]; then
-          echo "Erro: Install macOS.app não encontrado em /Applications"
-          exit 1
-        fi
-        echo "Instalado: $APP_DIR"
+      - name: Encontrar caminho do Install macOS.app
+        id: find-app
+        run: |
+          APP_PATH=$(find /Applications -name "Install macOS*.app" -maxdepth 1 | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Install macOS.app não encontrado!"
+            exit 1
+          fi
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+          echo "Encontrado: $APP_PATH"
 
-    - name: Criar um .dmg a partir do Install macOS.app
-      run: |
-        # Criar uma imagem de disco (dmg) a partir do .app encontrado
-        hdiutil create -volname "Install macOS" -srcfolder "$APP_DIR" -ov -format UDZO /tmp/Install\ macOS.dmg
+      - name: Criar DMG a partir do .app
+        run: |
+          VOLUME_NAME="macOSInstaller"
+          mkdir -p dmg-temp
+          cp -R "$APP_PATH" dmg-temp/
+          hdiutil create -volname "$VOLUME_NAME" -srcfolder dmg-temp -ov -format UDZO macOSInstaller.dmg
 
-    - name: Criar um Release no GitHub
-      uses: actions/create-release@v1
-      with:
-        tag_name: v1.0.0
-        release_name: "Release do macOS Install"
-        body: "Release contendo o Install macOS em formato .dmg"
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Fazer upload do DMG como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOSInstaller
+          path: macOSInstaller.dmg
 
-    - name: Upload do arquivo .dmg para o Release
-      uses: actions/upload-artifact@v4
-      with:
-        name: Install-macOS-dmg
-        path: /tmp/Install\ macOS.dmg
-
-    # Não apagar o arquivo .pkg do cache
-    - name: Limpeza de arquivos temporários não essenciais
-      run: |
-        # O arquivo .pkg permanece no cache, então não precisamos apagá-lo
-        rm -f /tmp/Install\ macOS.dmg
+      - name: Criar release e enviar DMG
+        uses: softprops/action-gh-release@v2
+        with:
+          files: macOSInstaller.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
