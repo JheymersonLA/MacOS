@@ -38,24 +38,46 @@ jobs:
           echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
           echo "Encontrado: $APP_PATH"
 
-      - name: Montar SharedSupport.dmg
+      - name: Montar SharedSupport.dmg do instalador
         run: |
           SHARED_SUPPORT="$APP_PATH/Contents/SharedSupport/SharedSupport.dmg"
           if [ ! -f "$SHARED_SUPPORT" ]; then
             echo "SharedSupport.dmg não encontrado em $SHARED_SUPPORT"
             exit 1
           fi
-          hdiutil attach "$SHARED_SUPPORT"
+          hdiutil attach "$SHARED_SUPPORT" -noverify -nobrowse -mountpoint /Volumes/SharedSupport
+
+      - name: Depurar - Verificar volume montado
+        run: |
+          ls -la /Volumes/
+          diskutil list
 
       - name: Criar DMG a partir do volume montado
         run: |
-          MOUNTED_VOLUME=$(mount | grep "Shared Support" | awk '{print $3}')
-          if [ -z "$MOUNTED_VOLUME" ]; then
-            echo "Volume 'Shared Support' não montado!"
+          MOUNTED_VOLUME="/Volumes/SharedSupport"
+          if [ ! -d "$MOUNTED_VOLUME" ]; then
+            echo "Erro: Volume não encontrado em $MOUNTED_VOLUME"
             exit 1
           fi
-          mkdir -p output
-          hdiutil create -volname "Install macOS" -srcfolder "$MOUNTED_VOLUME" -format UDZO output/Install_macOS.dmg
+
+          mkdir -p "$GITHUB_WORKSPACE/output"
+          hdiutil create \
+            -volname "Install macOS" \
+            -srcfolder "$MOUNTED_VOLUME" \
+            -format UDZO \
+            -ov \
+            "$GITHUB_WORKSPACE/output/Install_macOS.dmg"
+
+          if [ ! -f "$GITHUB_WORKSPACE/output/Install_macOS.dmg" ]; then
+            echo "Erro: Falha ao criar o DMG!"
+            exit 1
+          fi
+
+          echo "DMG criado com sucesso!"
+
+      - name: Ejetar volume
+        run: |
+          hdiutil eject /Volumes/SharedSupport || true
 
       - name: Fazer upload do DMG como artefato
         uses: actions/upload-artifact@v4
