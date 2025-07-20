@@ -1,4 +1,4 @@
-name: Create macOS .dmg from .app
+name: Create macOS .dmg from Install macOS.app
 
 on:
   push:
@@ -27,21 +27,22 @@ jobs:
           curl -L -o /tmp/InstallAssistant.pkg "https://swcdn.apple.com/content/downloads/51/28/082-44432-A_4NJSZXK8G5/v10fo5dlwd50fja3qbnhj7z9tp1dx41vq2/InstallAssistant.pkg"
         fi
 
-    - name: Extrair o Install macOS.app
+    - name: Instalar o InstallAssistant.pkg
       run: |
-        # Montar o InstallAssistant.pkg
-        hdiutil attach /tmp/InstallAssistant.pkg
-        
-        # Copiar o arquivo .app para o diretório de trabalho
-        cp -R /Volumes/"Install macOS"/Install\ macOS.app .
-        
-        # Desmontar a imagem
-        hdiutil detach /Volumes/"Install macOS"
+        # Instalar o pacote .pkg no diretório /Applications
+        sudo installer -pkg /tmp/InstallAssistant.pkg -target /
+
+    - name: Verificar se o Install macOS.app foi instalado
+      run: |
+        if [ ! -d /Applications/Install\ macOS.app ]; then
+          echo "Erro: Install macOS.app não encontrado em /Applications"
+          exit 1
+        fi
 
     - name: Criar um .dmg a partir do Install macOS.app
       run: |
-        # Criar uma imagem de disco vazia (dmg) a partir do .app
-        hdiutil create -volname "Install macOS" -srcfolder "Install macOS.app" -ov -format UDZO /tmp/Install\ macOS.dmg
+        # Criar uma imagem de disco (dmg) a partir do .app
+        hdiutil create -volname "Install macOS" -srcfolder "/Applications/Install macOS.app" -ov -format UDZO /tmp/Install\ macOS.dmg
 
     - name: Criar um Release no GitHub
       uses: actions/create-release@v1
@@ -63,4 +64,4 @@ jobs:
     - name: Limpeza
       run: |
         # Apagar arquivos temporários
-        rm -f /tmp/InstallAssistant.pkg Install\ macOS.app /tmp/Install\ macOS.dmg
+        rm -f /tmp/InstallAssistant.pkg /tmp/Install\ macOS.dmg
