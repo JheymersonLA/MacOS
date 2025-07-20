@@ -61,7 +61,8 @@ jobs:
         name: Install-macOS-dmg
         path: /tmp/Install\ macOS.dmg
 
-    - name: Limpeza
+    # Não apagar o arquivo .pkg do cache para reutilização nas próximas execuções
+    - name: Limpeza de arquivos temporários não essenciais
       run: |
-        # Apagar arquivos temporários
-        rm -f /tmp/InstallAssistant.pkg /tmp/Install\ macOS.dmg
+        # Apagar o arquivo .dmg após o upload, mas manter o .pkg no cache
+        rm -f /tmp/Install\ macOS.dmg
