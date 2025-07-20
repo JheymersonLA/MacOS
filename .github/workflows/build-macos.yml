@@ -10,82 +10,99 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - name: Restaurar cache do InstallAssistant.pkg
+      # --- CACHE E DOWNLOAD ---
+      - name: Tentar restaurar cache
         uses: actions/cache@v3
         id: cache-pkg
         with:
           path: /tmp/InstallAssistant.pkg
-          key: install-assistant-pkg-v1
+          key: installassistant-${{ hashFiles('.github/workflows/lockfile.txt') }}
 
-      - name: Baixar InstallAssistant.pkg (se necessário)
+      - name: Baixar InstallAssistant.pkg
         if: steps.cache-pkg.outputs.cache-hit != 'true'
         run: |
-          echo "Baixando InstallAssistant.pkg..."
-          curl -L -o /tmp/InstallAssistant.pkg "https://swcdn.apple.com/content/downloads/51/28/082-44432-A_4NJSZXK8G5/v10fo5dlwd50fja3qbnhj7z9tp1dx41vq2/InstallAssistant.pkg"
+          curl -L -o /tmp/InstallAssistant.pkg \
+            "https://swcdn.apple.com/content/downloads/51/28/082-44432-A_4NJSZXK8G5/v10fo5dlwd50fja3qbnhj7z9tp1dx41vq2/InstallAssistant.pkg" || {
+              [ -f /tmp/InstallAssistant.pkg ] && exit 0 || exit 1
+          }
+        timeout-minutes: 30
 
-      - name: Instalar o InstallAssistant.pkg
+      - name: Salvar no cache
+        if: steps.cache-pkg.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v3
+        with:
+          path: /tmp/InstallAssistant.pkg
+          key: ${{ steps.cache-pkg.outputs.cache-primary-key }}
+
+      # --- INSTALAÇÃO ---
+      - name: Instalar InstallAssistant.pkg
         run: |
-          sudo installer -pkg /tmp/InstallAssistant.pkg -target /
+          sudo installer -pkg /tmp/InstallAssistant.pkg -target / -verbose
 
-      - name: Encontrar caminho do Install macOS.app
+      # --- LOCALIZAR APP ---
+      - name: Encontrar app de instalação
         id: find-app
         run: |
-          APP_PATH=$(find /Applications -maxdepth 1 -type d -name "Install macOS*.app" | head -n 1)
-          if [ -z "$APP_PATH" ]; then
-            echo "Install macOS.app não encontrado!"
-            exit 1
-          fi
-          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
-          echo "Encontrado: $APP_PATH"
+          APP_PATH=$(find /Applications -maxdepth 1 -name "Install macOS*.app" -print -quit)
+          [ -z "$APP_PATH" ] && { echo "::error::App não encontrado"; exit 1; }
+          echo "APP_PATH=${APP_PATH}" >> $GITHUB_ENV
+          echo "App encontrado: ${APP_PATH}"
 
-      - name: Montar SharedSupport.dmg do instalador
+      # --- MONTAGEM DO DMG ---
+      - name: Montar SharedSupport.dmg
         run: |
-          SHARED_SUPPORT="$APP_PATH/Contents/SharedSupport/SharedSupport.dmg"
-          if [ ! -f "$SHARED_SUPPORT" ]; then
-            echo "SharedSupport.dmg não encontrado em $SHARED_SUPPORT"
-            exit 1
-          fi
-          hdiutil attach "$SHARED_SUPPORT" -noverify -nobrowse -mountpoint /Volumes/SharedSupport
+          # Forçar desmontagem se existir
+          hdiutil eject "/Volumes/SharedSupport" -force 2>/dev/null || true
 
-      - name: Depurar - Verificar volume montado
-        run: |
-          ls -la /Volumes/
-          diskutil list
+          # Montagem com tratamento explícito
+          hdiutil attach \
+            "$APP_PATH/Contents/SharedSupport/SharedSupport.dmg" \
+            -mountpoint "/Volumes/SharedSupport" \
+            -nobrowse \
+            -noverify \
+            -noautoopen \
+            -owners on
 
-      - name: Criar DMG a partir do volume montado
-        run: |
-          MOUNTED_VOLUME="/Volumes/SharedSupport"
-          if [ ! -d "$MOUNTED_VOLUME" ]; then
-            echo "Erro: Volume não encontrado em $MOUNTED_VOLUME"
+          # Verificação crítica
+          if [ ! -d "/Volumes/SharedSupport" ]; then
+            echo "::error::Falha na montagem"
+            diskutil list
             exit 1
           fi
 
+      # --- CRIAÇÃO DO DMG ---
+      - name: Criar DMG final
+        run: |
           mkdir -p "$GITHUB_WORKSPACE/output"
+          
           hdiutil create \
             -volname "Install macOS" \
-            -srcfolder "$MOUNTED_VOLUME" \
+            -srcfolder "/Volumes/SharedSupport" \
             -format UDZO \
             -ov \
+            -scrub \
+            -fs HFS+ \
+            -megabytes 16000 \
             "$GITHUB_WORKSPACE/output/Install_macOS.dmg"
 
-          if [ ! -f "$GITHUB_WORKSPACE/output/Install_macOS.dmg" ]; then
-            echo "Erro: Falha ao criar o DMG!"
+          [ -f "$GITHUB_WORKSPACE/output/Install_macOS.dmg" ] || {
+            echo "::error::Falha ao criar DMG"
             exit 1
-          fi
+          }
 
-          echo "DMG criado com sucesso!"
-
+      # --- LIMPEZA ---
       - name: Ejetar volume
         run: |
-          hdiutil eject /Volumes/SharedSupport || true
+          hdiutil eject "/Volumes/SharedSupport" -force || true
 
-      - name: Fazer upload do DMG como artefato
+      # --- PUBLICAÇÃO ---
+      - name: Upload do artefato
         uses: actions/upload-artifact@v4
         with:
           name: Install_macOS
           path: output/Install_macOS.dmg
 
-      - name: Criar release e enviar DMG
+      - name: Criar release
         uses: softprops/action-gh-release@v2
         with:
           files: output/Install_macOS.dmg
