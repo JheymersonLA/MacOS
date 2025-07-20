@@ -24,7 +24,10 @@ jobs:
     - name: Baixar InstallAssistant.pkg se não encontrado no cache
       run: |
         if [ ! -f /tmp/InstallAssistant.pkg ]; then
+          echo "Baixando InstallAssistant.pkg..."
           curl -L -o /tmp/InstallAssistant.pkg "https://swcdn.apple.com/content/downloads/51/28/082-44432-A_4NJSZXK8G5/v10fo5dlwd50fja3qbnhj7z9tp1dx41vq2/InstallAssistant.pkg"
+        else
+          echo "InstallAssistant.pkg encontrado no cache."
         fi
 
     - name: Instalar o InstallAssistant.pkg
@@ -61,8 +64,8 @@ jobs:
         name: Install-macOS-dmg
         path: /tmp/Install\ macOS.dmg
 
-    # Não apagar o arquivo .pkg do cache para reutilização nas próximas execuções
+    # Não apagar o arquivo .pkg do cache
     - name: Limpeza de arquivos temporários não essenciais
       run: |
-        # Apagar o arquivo .dmg após o upload, mas manter o .pkg no cache
+        # O arquivo .pkg permanece no cache, então não precisamos apagá-lo
         rm -f /tmp/Install\ macOS.dmg
