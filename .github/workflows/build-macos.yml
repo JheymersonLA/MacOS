@@ -6,8 +6,8 @@ on:
       - master
 
 jobs:
-  build-dmg:
-    runs-on: macos-14-arm64
+  build:
+    runs-on: macos-latest
 
     steps:
       - name: Restaurar cache do InstallAssistant.pkg
