@@ -1,4 +1,4 @@
-name: Criar DMG do macOS Installer
+name: Extrair BaseSystem.dmg do macOS Installer
 
 on:
   push:
@@ -6,12 +6,12 @@ on:
       - master
 
 jobs:
-  build:
+  extract:
     runs-on: macos-latest
 
     steps:
       # --- CACHE ---
-      - name: Restaurar cache
+      - name: Tentar restaurar cache
         uses: actions/cache@v3
         id: cache-pkg
         with:
@@ -27,72 +27,56 @@ jobs:
             --progress-bar
         timeout-minutes: 30
 
-      # --- INSTALAÇÃO ---
-      - name: Instalar InstallAssistant.pkg
+      # --- EXTRAIR BASESYSTEM.DMG ---
+      - name: Extrair arquivos do pacote
         run: |
-          sudo installer -pkg /tmp/InstallAssistant.pkg -target / -verbose
-
-      # --- LOCALIZAR APP ---
-      - name: Encontrar app de instalação
-        id: find-app
-        run: |
-          APP_PATH=$(find /Applications -maxdepth 1 -name "Install macOS*.app" -print -quit)
-          [ -z "$APP_PATH" ] && { echo "::error::App não encontrado"; exit 1; }
-          echo "APP_PATH=${APP_PATH}" >> $GITHUB_ENV
-          echo "App encontrado: ${APP_PATH}"
-
-      # --- MONTAGEM SEGURA ---
-      - name: Montar SharedSupport.dmg com permissões
-        run: |
-          # Desmontar se já existir
-          hdiutil eject "/Volumes/SharedSupport" -force 2>/dev/null || true
+          # Criar diretório de trabalho
+          mkdir -p "$GITHUB_WORKSPACE/output"
           
-          # Montar com permissões explícitas
-          sudo hdiutil attach \
-            "$APP_PATH/Contents/SharedSupport/SharedSupport.dmg" \
-            -mountpoint "/Volumes/SharedSupport" \
-            -nobrowse \
-            -noverify \
-            -noautoopen \
-            -owners on \
-            -verbose
+          # Extrair o conteúdo do .pkg
+          echo "Extraindo InstallAssistant.pkg..."
+          xar -xf /tmp/InstallAssistant.pkg -C "$GITHUB_WORKSPACE/output"
 
-          # Ajustar permissões
-          sudo chown -R runner:staff "/Volumes/SharedSupport"
-          sudo chmod -R 755 "/Volumes/SharedSupport"
+          # Encontrar e extrair o Payload
+          echo "Processando Payload..."
+          cd "$GITHUB_WORKSPACE/output"
+          find . -name "Payload" -exec cpio -idv < {} \;
 
-      # --- CRIAÇÃO DO DMG ---
-      - name: Criar DMG com autenticação
+          # Localizar o BaseSystem.dmg
+          BASESYSTEM_DMG=$(find "$GITHUB_WORKSPACE/output" -name "BaseSystem.dmg" -print -quit)
+          if [ -z "$BASESYSTEM_DMG" ]; then
+            echo "::error::BaseSystem.dmg não encontrado!"
+            exit 1
+          fi
+
+          # Mover para o diretório de saída
+          mv "$BASESYSTEM_DMG" "$GITHUB_WORKSPACE/output/BaseSystem.dmg"
+          echo "BaseSystem.dmg encontrado em: $GITHUB_WORKSPACE/output/BaseSystem.dmg"
+
+      # --- VERIFICAR TAMANHO ---
+      - name: Verificar arquivo extraído
         run: |
-          echo "⏳ Iniciando criação do DMG (pode demorar vários minutos)..."
-          
-          # Criar como root para evitar problemas de permissão
-          sudo hdiutil create \
-            -volname "Install macOS" \
-            -srcfolder "/Volumes/SharedSupport" \
-            -format UDZO \
-            -ov \
-            -scrub \
-            -fs HFS+ \
-            -uid 0 \
-            -gid 80 \
-            -megabytes 16000 \
-            "$GITHUB_WORKSPACE/output/Install_macOS.dmg" \
-            -verbose
+          FILE_SIZE=$(du -h "$GITHUB_WORKSPACE/output/BaseSystem.dmg" | cut -f1)
+          echo "Tamanho do BaseSystem.dmg: $FILE_SIZE"
+          if [ $(stat -f%z "$GITHUB_WORKSPACE/output/BaseSystem.dmg") -lt 100000000 ]; then
+            echo "::error::Arquivo muito pequeno, possivelmente corrompido"
+            exit 1
+          fi
 
-          # Ajustar dono do arquivo final
-          sudo chown runner:staff "$GITHUB_WORKSPACE/output/Install_macOS.dmg"
-
-          echo "✅ DMG criado com sucesso!"
+      # --- PUBLICAR RELEASE ---
+      - name: Criar release com BaseSystem.dmg
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            output/BaseSystem.dmg
+          draft: false
+          prerelease: false
+          body: "BaseSystem.dmg extraído do InstallAssistant.pkg"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # --- LIMPEZA ---
-      - name: Ejetar volume
+      - name: Limpar arquivos temporários
         run: |
-          hdiutil eject "/Volumes/SharedSupport" -force || true
-
-      # --- PUBLICAÇÃO ---
-      - name: Upload do artefato
-        uses: actions/upload-artifact@v4
-        with:
-          name: Install_macOS
-          path: output/Install_macOS.dmg
+          rm -rf /tmp/InstallAssistant.pkg
+          rm -rf "$GITHUB_WORKSPACE/output/Install macOS*.app"
